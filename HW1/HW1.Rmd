@@ -1,0 +1,168 @@
+---
+title: "HW1"
+output: html_document
+date: "2023-10-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE)
+```
+
+```{r}
+# Load packages
+pacman::p_load(magrittr, here, tidyverse, janitor, pracma, rmatio)
+
+# Load data
+air_df = read_csv(here("Data", "airline.txt"))
+
+air_df %<>% clean_names()
+```
+
+### Question 1
+
+```{r}
+# Delay = b0 + b1distance + b2departure delay + b3-8 day of week fixed effects
+
+# Generate dummy variable for day fixed effects
+air_df %<>% mutate(monday = if_else(day_of_week == 1, 1,0),
+                 tuesday = if_else(day_of_week == 2, 1,0),
+                 wednesday = if_else(day_of_week == 3, 1,0),
+                 thursday = if_else(day_of_week == 4, 1,0),
+                 friday = if_else(day_of_week == 5, 1,0),
+                 saturday = if_else(day_of_week == 6, 1,0),
+                 sunday = if_else(day_of_week == 17, 1,0)) %>%
+  select(-day_of_week)
+
+# First we'll make a matrix of the x values for ease of use
+dependent_vars = air_df |> select(-c(arr_delay, sunday)) |>  # We have to drop sunday because of multicollinearity of the dummy variables
+  mutate(constant = 1) |> 
+  select(constant, everything()) |> # Move the constant column to the start to match the output of lm
+  as.matrix()
+
+# Function that calculates sum of squared errors
+sum_squares = function(beta){
+  squared_error = (air_df$arr_delay - dependent_vars %*% beta)^2
+  sum_squares = sum(squared_error)
+}
+
+# We'll use the fminsearch from the pracma package which is equivilant to its matlab version to find the optimized betas
+fminsearch(sum_squares, rep(0,9))
+
+# Calculate coefficients using matrix algebra
+solve(t(dependent_vars)%*%dependent_vars)%*%t(dependent_vars)%*%air_df$arr_delay
+# Exactly the same result
+```
+
+### Question 2
+
+```{r}
+# Generate dummy variable for a flight being over 15 minutes late
+air_df %<>% mutate(late = if_else(arr_delay > 15, 1, 0))
+
+# Get dependent variables for this model
+dependent_vars = air_df |> select(c(distance, dep_delay)) |> 
+  mutate(constant = 1) |> 
+  select(constant, everything()) |> 
+  as.matrix()
+
+# Function to calculate log liklihood
+probability = function(beta){
+  prob = as.matrix(air_df$late) * log(1/(1+exp(-dependent_vars%*%beta))) + (1 - as.matrix(air_df$late)) * log(1 - 1/(1 + exp(-dependent_vars%*%beta)))
+  sum_prob = sum(prob)
+  return(sum_prob)
+}
+
+# Search over betas. We're using a new function here because fminsearch didn't work here. Fminsearch only iterated by steps of 1, so when the starting it checked beta = c(0,1,0) which breaks the objective function. This function seems to mitigate that
+optim(c(1,0,0), probability, control = list(fnscale = -1))
+
+# Compare to logit regression
+glm(late ~ distance + dep_delay, data = air_df,family = binomial(link = "logit"))
+# Its fairly close
+```
+
+### Question 3
+
+```{r}
+# Load matlab file
+iv_df = read.mat(here("Data", "IV.mat"))
+
+# Extract x,y,z
+X = iv_df[[1]]
+Y = iv_df[[2]]
+Z = iv_df[[3]]
+
+# Define initial weight matrix
+W = diag(4)
+
+# Define g function
+g = function(beta){
+  1/length(Z) * t(Z)%*%(Y - X%*%beta)
+}
+
+# Define objective function
+Q = function(beta, W){
+  t(g(beta)) %*% W %*% g(beta)
+}
+
+# Minimize objective function
+(first_stage = fminsearch(Q, rep(0,3), W = W, method = "Hooke-Jeeves"))
+
+# Calculate residuals
+beta_hat = first_stage$xmin
+e = Y - X%*%beta_hat
+
+# Calculate variance
+G_hat = t(Z) %*% X
+omega = sapply(1:4, function(i){(t(Z)%*%Z)[i,]*(e^2)[i,]})
+
+(variance_first = solve(t(G_hat)%*%W%*%G_hat)%*%t(G_hat)%*%W%*%omega%*%W%*%G_hat%*%solve(t(G_hat)%*%W%*%G_hat))
+
+# Second stage
+# Update w
+W_hat = solve(sapply(1:nrow(Z), function(i){(e^2)[i]*Z[i,]}) %*% Z)
+
+# Minimize objective function again
+(second_stage = fminsearch(Q, beta_hat, W = W_hat, method = "Hooke-Jeeves"))
+
+# Calculate residuals
+beta_hat_second = second_stage$xmin
+e_second = Y - X%*%beta_hat
+
+# Calculate variance
+omega_second = sapply(1:4, function(i){(t(Z)%*%Z)[i,]*(e_second^2)[i,]})
+
+(variance_first = solve(t(G_hat)%*%W_hat%*%G_hat)%*%t(G_hat)%*%W_hat%*%omega_second%*%W_hat%*%G_hat%*%solve(t(G_hat)%*%W_hat%*%G_hat))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
