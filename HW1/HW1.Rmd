@@ -62,7 +62,7 @@ air_df %<>% mutate(late = if_else(arr_delay > 15, 1, 0))
 
 # Get dependent variables for this model
 dependent_vars = air_df |> select(c(distance, dep_delay)) |> 
-  mutate(constant = 1) |> 
+  mutate(constant = 1L) |> 
   select(constant, everything()) |> 
   as.matrix()
 
@@ -114,9 +114,17 @@ e = Y - X%*%beta_hat
 
 # Calculate variance
 G_hat = t(Z) %*% X
-omega = sapply(1:4, function(i){(t(Z)%*%Z)[i,]*(e^2)[i,]})
+omega = sapply(1:4, function(i){
+  (t(Z)%*%Z)[i,]*(e^2)[i,]
+  }
+)
 
-(variance_first = solve(t(G_hat)%*%W%*%G_hat)%*%t(G_hat)%*%W%*%omega%*%W%*%G_hat%*%solve(t(G_hat)%*%W%*%G_hat))
+variance_first = solve(t(G_hat)%*%W%*%G_hat)%*%t(G_hat)%*%W%*%omega%*%W%*%G_hat%*%solve(t(G_hat)%*%W%*%G_hat)
+
+# Calculate SE
+se_first = variance_first |> diag() |> sqrt()
+names(se_first) = c("SE Beta1", "SE Beta2", "SE Beta3")
+se_first
 
 # Second stage
 # Update w
@@ -130,9 +138,17 @@ beta_hat_second = second_stage$xmin
 e_second = Y - X%*%beta_hat
 
 # Calculate variance
-omega_second = sapply(1:4, function(i){(t(Z)%*%Z)[i,]*(e_second^2)[i,]})
+omega_second = sapply(1:4, function(i){
+  (t(Z)%*%Z)[i,]*(e_second^2)[i,]
+  }
+)
 
-(variance_first = solve(t(G_hat)%*%W_hat%*%G_hat)%*%t(G_hat)%*%W_hat%*%omega_second%*%W_hat%*%G_hat%*%solve(t(G_hat)%*%W_hat%*%G_hat))
+variance_second = solve(t(G_hat)%*%W_hat%*%G_hat)%*%t(G_hat)%*%W_hat%*%omega_second%*%W_hat%*%G_hat%*%solve(t(G_hat)%*%W_hat%*%G_hat)
+
+# Calculate SE
+(se_second = variance_second |> diag() |> sqrt())
+names(se_second) = c("SE Beta1", "SE Beta2", "SE Beta3")
+se_second
 ```
 
 
