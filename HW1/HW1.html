@@ -395,26 +395,15 @@ sum_squares = function(beta){
 }
 
 # We&#39;ll use the fminsearch from the pracma package which is equivilant to its matlab version to find the optimized betas
-fminsearch(sum_squares, rep(0,9))</code></pre>
-<pre><code>## $xmin
-## [1] -1.267098776  1.016565016 -0.003133055  0.843533706 -0.074605986
-## [6]  1.012883212  0.509084412 -0.872909482 -0.697221162
-## 
-## $fmin
-## [1] 4323520
-## 
-## $count
-## [1] 1867
-## 
-## $convergence
-## [1] 0
-## 
-## $info
-## $info$solver
-## [1] &quot;Nelder-Mead&quot;
-## 
-## $info$restarts
-## [1] 0</code></pre>
+ols = fminsearch(sum_squares, rep(0,9))
+
+# Print coefficients
+names(ols$xmin) = colnames(dependent_vars)
+ols$xmin</code></pre>
+<pre><code>##     constant    dep_delay     distance       monday      tuesday    wednesday 
+## -1.267098776  1.016565016 -0.003133055  0.843533706 -0.074605986  1.012883212 
+##     thursday       friday     saturday 
+##  0.509084412 -0.872909482 -0.697221162</code></pre>
 <pre class="r"><code># Calculate coefficients using matrix algebra
 solve(t(dependent_vars)%*%dependent_vars)%*%t(dependent_vars)%*%air_df$arr_delay</code></pre>
 <pre><code>##                   [,1]
@@ -436,7 +425,7 @@ air_df %&lt;&gt;% mutate(late = if_else(arr_delay &gt; 15, 1, 0))
 
 # Get dependent variables for this model
 dependent_vars = air_df |&gt; select(c(distance, dep_delay)) |&gt; 
-  mutate(constant = 1) |&gt; 
+  mutate(constant = 1L) |&gt; 
   select(constant, everything()) |&gt; 
   as.matrix()
 
@@ -448,37 +437,20 @@ probability = function(beta){
 }
 
 # Search over betas. We&#39;re using a new function here because fminsearch didn&#39;t work here. Fminsearch only iterated by steps of 1, so when the starting it checked beta = c(0,1,0) which breaks the objective function. This function seems to mitigate that
-optim(c(1,0,0), probability, control = list(fnscale = -1))</code></pre>
-<pre><code>## $par
-## [1] -1.740651e+00 -7.059086e-05  4.049501e-02
-## 
-## $value
-## [1] -6645.74
-## 
-## $counts
-## function gradient 
-##      502       NA 
-## 
-## $convergence
-## [1] 1
-## 
-## $message
-## NULL</code></pre>
+logit = optim(c(1,0,0), probability, control = list(fnscale = -1))
+
+# Print coefficients
+names(logit$par) = colnames(dependent_vars)
+logit$par</code></pre>
+<pre><code>##      constant      distance     dep_delay 
+## -1.740651e+00 -7.059086e-05  4.049501e-02</code></pre>
 <pre class="r"><code># Compare to logit regression
-glm(late ~ distance + dep_delay, data = air_df,family = binomial(link = &quot;logit&quot;))</code></pre>
+logit_real = glm(late ~ distance + dep_delay, data = air_df,family = binomial(link = &quot;logit&quot;))</code></pre>
 <pre><code>## Warning: glm.fit: fitted probabilities numerically 0 or 1 occurred</code></pre>
-<pre><code>## 
-## Call:  glm(formula = late ~ distance + dep_delay, family = binomial(link = &quot;logit&quot;), 
-##     data = air_df)
-## 
-## Coefficients:
-## (Intercept)     distance    dep_delay  
-##  -2.6130482   -0.0001367    0.1294956  
-## 
-## Degrees of Freedom: 20411 Total (i.e. Null);  20409 Residual
-## Null Deviance:       21830 
-## Residual Deviance: 9976  AIC: 9982</code></pre>
-<pre class="r"><code># Its very different</code></pre>
+<pre class="r"><code># Its fairly close
+logit_real$coefficients</code></pre>
+<pre><code>##   (Intercept)      distance     dep_delay 
+## -2.6130481999 -0.0001367126  0.1294956106</code></pre>
 </div>
 <div id="question-3" class="section level3">
 <h3>Question 3</h3>
@@ -504,76 +476,62 @@ Q = function(beta, W){
 }
 
 # Minimize objective function
-(first_stage = fminsearch(Q, rep(0,3), W = W, method = &quot;Hooke-Jeeves&quot;))</code></pre>
-<pre><code>## $xmin
-## [1] 1.91869 1.10360 3.65262
-## 
-## $fmin
-##             [,1]
-## [1,] 0.001339032
-## 
-## $count
-## [1] 543
-## 
-## $convergence
-## [1] 0
-## 
-## $info
-## $info$solver
-## [1] &quot;Hooke-Jeeves&quot;
-## 
-## $info$iterations
-## [1] 26</code></pre>
+first_stage = fminsearch(Q, rep(0,3), W = W, method = &quot;Hooke-Jeeves&quot;)
+
+# Print coefficients
+names(first_stage$xmin) = c(&quot;B1&quot;, &quot;B2&quot;, &quot;B3&quot;)
+first_stage$xmin</code></pre>
+<pre><code>##      B1      B2      B3 
+## 1.91869 1.10360 3.65262</code></pre>
 <pre class="r"><code># Calculate residuals
 beta_hat = first_stage$xmin
 e = Y - X%*%beta_hat
 
 # Calculate variance
 G_hat = t(Z) %*% X
-omega = sapply(1:4, function(i){(t(Z)%*%Z)[i,]*(e^2)[i,]})
+omega = sapply(1:4, function(i){
+  (t(Z)%*%Z)[i,]*(e^2)[i,]
+  }
+)
 
-(variance_first = solve(t(G_hat)%*%W%*%G_hat)%*%t(G_hat)%*%W%*%omega%*%W%*%G_hat%*%solve(t(G_hat)%*%W%*%G_hat))</code></pre>
-<pre><code>##             [,1]         [,2]          [,3]
-## [1,] 0.027371936 -0.002511904 -0.0007608919
-## [2,] 0.002903413  0.080763053  0.0429833840
-## [3,] 0.003622524  0.063074259  0.0583136243</code></pre>
+variance_first = solve(t(G_hat)%*%W%*%G_hat)%*%t(G_hat)%*%W%*%omega%*%W%*%G_hat%*%solve(t(G_hat)%*%W%*%G_hat)
+
+# Calculate SE
+se_first = variance_first |&gt; diag() |&gt; sqrt()
+names(se_first) = c(&quot;SE Beta1&quot;, &quot;SE Beta2&quot;, &quot;SE Beta3&quot;)
+se_first</code></pre>
+<pre><code>##  SE Beta1  SE Beta2  SE Beta3 
+## 0.1654447 0.2841884 0.2414821</code></pre>
 <pre class="r"><code># Second stage
 # Update w
 W_hat = solve(sapply(1:nrow(Z), function(i){(e^2)[i]*Z[i,]}) %*% Z)
 
 # Minimize objective function again
-(second_stage = fminsearch(Q, beta_hat, W = W_hat, method = &quot;Hooke-Jeeves&quot;))</code></pre>
-<pre><code>## $xmin
-## [1] 1.921046 1.093994 3.661452
-## 
-## $fmin
-##              [,1]
-## [1,] 6.923386e-08
-## 
-## $count
-## [1] 447
-## 
-## $convergence
-## [1] 0
-## 
-## $info
-## $info$solver
-## [1] &quot;Hooke-Jeeves&quot;
-## 
-## $info$iterations
-## [1] 26</code></pre>
+second_stage = fminsearch(Q, beta_hat, W = W_hat, method = &quot;Hooke-Jeeves&quot;)
+
+# Print coefficients
+names(second_stage$xmin) = c(&quot;B1&quot;, &quot;B2&quot;, &quot;B3&quot;)
+second_stage$xmin</code></pre>
+<pre><code>##       B1       B2       B3 
+## 1.921046 1.093994 3.661452</code></pre>
 <pre class="r"><code># Calculate residuals
 beta_hat_second = second_stage$xmin
 e_second = Y - X%*%beta_hat
 
 # Calculate variance
-omega_second = sapply(1:4, function(i){(t(Z)%*%Z)[i,]*(e_second^2)[i,]})
+omega_second = sapply(1:4, function(i){
+  (t(Z)%*%Z)[i,]*(e_second^2)[i,]
+  }
+)
 
-(variance_first = solve(t(G_hat)%*%W_hat%*%G_hat)%*%t(G_hat)%*%W_hat%*%omega_second%*%W_hat%*%G_hat%*%solve(t(G_hat)%*%W_hat%*%G_hat))</code></pre>
-<pre><code>##             [,1]         [,2]         [,3]
-## [1,] 0.027388697 -0.003103582 -0.001010128
-## [2,] 0.001437604  0.088873687  0.038760929
-## [3,] 0.001557429  0.069532737  0.049402331</code></pre>
+variance_second = solve(t(G_hat)%*%W_hat%*%G_hat)%*%t(G_hat)%*%W_hat%*%omega_second%*%W_hat%*%G_hat%*%solve(t(G_hat)%*%W_hat%*%G_hat)
+
+# Calculate SE
+se_second = variance_second |&gt; diag() |&gt; sqrt()
+names(se_second) = c(&quot;SE Beta1&quot;, &quot;SE Beta2&quot;, &quot;SE Beta3&quot;)
+se_second</code></pre>
+<pre><code>##  SE Beta1  SE Beta2  SE Beta3 
+## 0.1654953 0.2981169 0.2222664</code></pre>
 </div>
 
 

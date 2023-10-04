@@ -47,7 +47,11 @@ sum_squares = function(beta){
 }
 
 # We'll use the fminsearch from the pracma package which is equivilant to its matlab version to find the optimized betas
-fminsearch(sum_squares, rep(0,9))
+ols = fminsearch(sum_squares, rep(0,9))
+
+# Print coefficients
+names(ols$xmin) = colnames(dependent_vars)
+ols$xmin
 
 # Calculate coefficients using matrix algebra
 solve(t(dependent_vars)%*%dependent_vars)%*%t(dependent_vars)%*%air_df$arr_delay
@@ -74,11 +78,16 @@ probability = function(beta){
 }
 
 # Search over betas. We're using a new function here because fminsearch didn't work here. Fminsearch only iterated by steps of 1, so when the starting it checked beta = c(0,1,0) which breaks the objective function. This function seems to mitigate that
-optim(c(1,0,0), probability, control = list(fnscale = -1))
+logit = optim(c(1,0,0), probability, control = list(fnscale = -1))
+
+# Print coefficients
+names(logit$par) = colnames(dependent_vars)
+logit$par
 
 # Compare to logit regression
-glm(late ~ distance + dep_delay, data = air_df,family = binomial(link = "logit"))
+logit_real = glm(late ~ distance + dep_delay, data = air_df,family = binomial(link = "logit"))
 # Its fairly close
+logit_real$coefficients
 ```
 
 ### Question 3
@@ -106,7 +115,11 @@ Q = function(beta, W){
 }
 
 # Minimize objective function
-(first_stage = fminsearch(Q, rep(0,3), W = W, method = "Hooke-Jeeves"))
+first_stage = fminsearch(Q, rep(0,3), W = W, method = "Hooke-Jeeves")
+
+# Print coefficients
+names(first_stage$xmin) = c("B1", "B2", "B3")
+first_stage$xmin
 
 # Calculate residuals
 beta_hat = first_stage$xmin
@@ -131,7 +144,11 @@ se_first
 W_hat = solve(sapply(1:nrow(Z), function(i){(e^2)[i]*Z[i,]}) %*% Z)
 
 # Minimize objective function again
-(second_stage = fminsearch(Q, beta_hat, W = W_hat, method = "Hooke-Jeeves"))
+second_stage = fminsearch(Q, beta_hat, W = W_hat, method = "Hooke-Jeeves")
+
+# Print coefficients
+names(second_stage$xmin) = c("B1", "B2", "B3")
+second_stage$xmin
 
 # Calculate residuals
 beta_hat_second = second_stage$xmin
@@ -146,7 +163,7 @@ omega_second = sapply(1:4, function(i){
 variance_second = solve(t(G_hat)%*%W_hat%*%G_hat)%*%t(G_hat)%*%W_hat%*%omega_second%*%W_hat%*%G_hat%*%solve(t(G_hat)%*%W_hat%*%G_hat)
 
 # Calculate SE
-(se_second = variance_second |> diag() |> sqrt())
+se_second = variance_second |> diag() |> sqrt()
 names(se_second) = c("SE Beta1", "SE Beta2", "SE Beta3")
 se_second
 ```
