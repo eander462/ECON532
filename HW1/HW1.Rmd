@@ -1,8 +1,8 @@
 ---
 title: "HW1"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 date: "2023-10-03"
 ---
 
@@ -33,7 +33,7 @@ air_df %<>% mutate(monday = if_else(day_of_week == 1, 1,0),
                  thursday = if_else(day_of_week == 4, 1,0),
                  friday = if_else(day_of_week == 5, 1,0),
                  saturday = if_else(day_of_week == 6, 1,0),
-                 sunday = if_else(day_of_week == 17, 1,0)) %>%
+                 sunday = if_else(day_of_week == 7, 1,0)) %>%
   select(-day_of_week)
 
 # First we'll make a matrix of the x values for ease of use
@@ -74,7 +74,7 @@ dependent_vars = air_df |> select(c(distance, dep_delay)) |>
 
 # Function to calculate log liklihood
 probability = function(beta){
-  prob = as.matrix(air_df$late) * log(1/(1+exp(-dependent_vars%*%beta))) + (1 - as.matrix(air_df$late)) * log(1 - 1/(1 + exp(-dependent_vars%*%beta)))
+  prob = (1 - as.matrix(air_df$late)) * log(1/(1+exp(dependent_vars%*%beta))) + as.matrix(air_df$late) * log(1 - 1/(1 + exp(dependent_vars%*%beta)))
   sum_prob = sum(prob)
   return(sum_prob)
 }
@@ -88,7 +88,7 @@ logit$par
 
 # Compare to logit regression
 logit_real = glm(late ~ distance + dep_delay, data = air_df,family = binomial(link = "logit"))
-# Its fairly close
+# Exactly the same
 logit_real$coefficients
 ```
 

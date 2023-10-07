@@ -379,7 +379,7 @@ air_df %&lt;&gt;% mutate(monday = if_else(day_of_week == 1, 1,0),
                  thursday = if_else(day_of_week == 4, 1,0),
                  friday = if_else(day_of_week == 5, 1,0),
                  saturday = if_else(day_of_week == 6, 1,0),
-                 sunday = if_else(day_of_week == 17, 1,0)) %&gt;%
+                 sunday = if_else(day_of_week == 7, 1,0)) %&gt;%
   select(-day_of_week)
 
 # First we&#39;ll make a matrix of the x values for ease of use
@@ -431,7 +431,7 @@ dependent_vars = air_df |&gt; select(c(distance, dep_delay)) |&gt;
 
 # Function to calculate log liklihood
 probability = function(beta){
-  prob = as.matrix(air_df$late) * log(1/(1+exp(-dependent_vars%*%beta))) + (1 - as.matrix(air_df$late)) * log(1 - 1/(1 + exp(-dependent_vars%*%beta)))
+  prob = (1 - as.matrix(air_df$late)) * log(1/(1+exp(dependent_vars%*%beta))) + as.matrix(air_df$late) * log(1 - 1/(1 + exp(dependent_vars%*%beta)))
   sum_prob = sum(prob)
   return(sum_prob)
 }
@@ -443,11 +443,11 @@ logit = optim(c(1,0,0), probability, control = list(fnscale = -1))
 names(logit$par) = colnames(dependent_vars)
 logit$par</code></pre>
 <pre><code>##      constant      distance     dep_delay 
-## -1.740651e+00 -7.059086e-05  4.049501e-02</code></pre>
+## -2.6127472099 -0.0001371865  0.1294617033</code></pre>
 <pre class="r"><code># Compare to logit regression
 logit_real = glm(late ~ distance + dep_delay, data = air_df,family = binomial(link = &quot;logit&quot;))</code></pre>
 <pre><code>## Warning: glm.fit: fitted probabilities numerically 0 or 1 occurred</code></pre>
-<pre class="r"><code># Its fairly close
+<pre class="r"><code># Exactly the same
 logit_real$coefficients</code></pre>
 <pre><code>##   (Intercept)      distance     dep_delay 
 ## -2.6130481999 -0.0001367126  0.1294956106</code></pre>
